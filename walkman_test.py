@@ -1,41 +1,60 @@
-#!/usr/bin/env python3
-
 import pymunk
-from pymunk_common import plane_space,set_circle,set_segment
-def set_ground(space,breadth,width):
-    #set_segment(space,breadth,(0,100),(width,100))
-    body = pymunk.Body(body_type=pymunk.Body.KINEMATIC)
-    seg = pymunk.Segment(body,(0,100),(width,100),breadth)
-    space.add(seg)
+from pymunk_common import plane_space
 
-def set_walkman(space,length,x,y):
-    set_circle(space,10,10,(x,y))
-    set_circle(space,10,10,(x,y+length))
+import os
+import matplotlib.pyplot as plt
+from pymunk.matplotlib_util import DrawOptions
+class step_space(plane_space):
+    def __init__(self,xlim,ylim,savedir,**keys):
+        super().__init__(**keys)
+        #set savedir
+        os.makedirs(savedir,exist_ok=True)
+        self.savedir = savedir
+        #set drawoptions
+        fig = plt.figure()
+        self.ax = plt.axes(xlim=xlim,ylim=ylim)
+        self.ax.set_aspect('equal')
+        self.output = DrawOptions(self.ax)
+        #init
+        self.last = 0.
+    def step(self,now,division=10,show=True):
+        dt = now-self.last
+        now_str = '{0:.2f}'.format(now)
+        assert division > 0,"division should be >0"
+        for d in range(division):
+            super().step(dt/division)
+        self.ax.clear()
+        self.debug_draw(self.output)
+        if show:
+            plt.pause(step)
+        plt.savefig(self.savedir+'/'+now_str+'.jpg')
+
+from pymunk.constraint import PivotJoint
+def set_arms(space,weist,y0,num,**filter_keys):
+    x,y = weist.position
+    step_y = (y - y0)/num
+    bodies = [space.set_circle(10,10,(x,y0+step_y*i),**filter_keys) for i in range(num)]
+    bodies.append(weist)
+    #joints
+    joints = [PivotJoint(*bodies[i:i+2],(x+10,y0+step_y*(2*i+1)/2)) for i in range(num)]
+    space.add(joints)
+def set_walkman(space,x0,y0,length,num,ID=1):
+    weist = space.set_circle(10,10,(x0,y0+length),group=ID)
+    set_arms(space,weist,y0,num,group=ID)
+    set_arms(space,weist,y0,num,group=ID)
 
 
 if __name__ == '__main__':
-    import matplotlib.pyplot as plt
-    fig = plt.figure(figsize=(14,10))
-    ax = plt.axes(xlim=(0,600),ylim=(0,600))
-    ax.set_aspect('equal')
-
-    space = plane_space(fig,ax,gravity=(0,-9.8))
-
-    set_walkman(space,100,100,100)
-    set_ground(space,1,600)
-
-    import os
     from datetime import datetime
-    savedir = os.path.expanduser('~/log/walkman_test/')+datetime.now().strftime('%Y%m%d_%H%M%S')
-    os.makedirs(savedir,exist_ok=True)
+    savedir = os.path.expanduser('~/log/walkman_test')+datetime.now().strftime('%Y%m%d_%H%M%S')
+    space = step_space((0,600),(0,600),savedir,gravity=(0,-9.8))
 
-    cycle,step = 10,1e-2
-    for t in range(100):
-        now = '{0:.2f}'.format(cycle*step*t)
-        for c in range(cycle):
-            space.step(step)
-        ax.clear()
-        ax.text(10,10,now,fontsize=12)
-        space.debug_draw(space.output)
-        plt.pause(1e-2)
-        plt.savefig(savedir+'/'+now+'.jpg')
+    #set ground
+    space.set_segment(10,(0,100),(600,100))
+
+    set_walkman(space,300,200,100,3,ID=1)
+    set_walkman(space,300,310,100,3,ID=1)
+
+    step=1e-2
+    for t in range(50):
+        space.step(step*t,show=True)

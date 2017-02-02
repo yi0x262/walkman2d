@@ -1,61 +1,46 @@
+def attr_set(obj,keys):
+    for key,value in keys.items():
+        setattr(obj,key,value)
+
 from pymunk import *
 from pymunk.vec2d import Vec2d
-
-#body
-def set_object(space,body,position,shape,elasticity=0.9999):
-    body.position = position
-    body.start_position = Vec2d(body.position)
-    shape.elasticity = elasticity
-    space.add(body,shape)
-def set_circle(space,mass,radius,position):
-    body = Body(mass,
-                moment_for_circle(mass,0,radius,(0,0)))
-    set_object( space, body, position,
-                Circle(body,radius))
-    return body
-def set_segment(space,breadth,*points):
-    body = Segment(space.static_body,*points,breadth)
-    space.add(body)
-#joint
-def set_pivot(body1,body2,**args):
-    pass
-
-
-import matplotlib.pyplot as plt
-from matplotlib import animation
-def set_animate(space,fig,ax,**keys):
-    output = matplotlib_util.DrawOptions(ax)
-    def init():
-        space.debug_draw(output)
-    def animate(dt):
-        for x in range(10):
-            space.step(0.02)
-        ax.clear()
-        space.debug_draw(output)
-        return list()
-    anim = animation.FuncAnimation(fig,animate,init_func=init,**keys)
-    return anim
-
-from pymunk import matplotlib_util
 class plane_space(Space):
-    def __init__(self,fig,ax,**keys):
-        super().__init__(self)
-        for key,value in keys.items():
-            setattr(self,key,value)
-        self.output = matplotlib_util.DrawOptions(ax)
-
+    def __init__(self,**keys):
+        super().__init__()
+        attr_set(self,keys)
+    def set_object(self,body,position,shape,**keys):
+        """
+        filter:
+            group       :number(alias for field number 0)
+            categories  :32bit mask(alias for field number 1)
+            mask        :32bit mask(alias for field number 2)
+        if self.group != other.group: they collide (group 0 collide all other groups)
+        if (self.categories & other.mask) != 0: they collide
+        """
+        body.position = position
+        body.start_position = Vec2d(position)
+        shape.filter = ShapeFilter(**keys)
+        print(shape.filter)
+        self.add(body,shape)
+    def set_circle(self,mass,radius,position,**keys):
+        body = Body(mass,moment_for_circle(mass,0,radius,(0,0)))
+        self.set_object(body,position,Circle(body,radius),**keys)
+        return body
+    def set_segment(self,breadth,*points):
+        body = Segment(self.static_body,*points,breadth)
+        self.add(body)
 if __name__ == '__main__':
-    #test
-    WIDTH,HEIGHT = 600,600
+    import matplotlib.pyplot as plt
+    fig = plt.figure(figsize=(14,10))
+    ax = plt.axes(xlim=(0,600),ylim=(0,600))
+    ax.set_aspect('equal')
+
     space = plane_space(gravity=(0,-9.8))
 
-    set_circle(space,10,25,(300,300))
+    space.set_circle(10,25,(300,300),layers=0b0)
+    space.set_segment(10,(0,100),(600,100))
 
-    set_segment(space,10,(0,100),(WIDTH,100))
-
-    fig = plt.figure()
-    ax = plt.axes(xlim=(0,WIDTH),ylim=(0,HEIGHT))
-    anim = set_animate(space,fig,ax,frames=100,blit=True,interval=20)
-    Writer = animation.writers['ffmpeg']
-    writer = Writer(fps=15,bitrate=1800)
-    anim.save('test.gif',writer=writer)
+    from pymunk.matplotlib_util import DrawOptions
+    output = DrawOptions(ax)
+    space.debug_draw(output)
+    plt.show()
